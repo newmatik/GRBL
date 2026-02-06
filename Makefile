@@ -17,20 +17,30 @@
 #  along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 
 
-# This is a prototype Makefile. Modify it according to your needs.
-# You should at least check the settings for
+# Makefile for GRBL CoreXY -- Newmatik Fork
+#
 # DEVICE ....... The AVR device you compile for
 # CLOCK ........ Target AVR clock rate in Hertz
-# OBJECTS ...... The object files created from your source files. This list is
-#                usually the same as the list of source files with suffix ".o".
-# PROGRAMMER ... Options to avrdude which define the hardware you use for
-#                uploading to the AVR and the interface where this hardware
-#                is connected.
-# FUSES ........ Parameters for avrdude to flash the fuses appropriately.
+# PROGRAMMER ... Options to avrdude for the Arduino Uno USB bootloader
+# AVR_TOOLCHAIN  Path to the AVR GCC toolchain bin/ directory.
+#                GRBL requires avr-gcc <= 7.x to fit in the ATmega328P 32KB flash.
+#                The Arduino IDE ships avr-gcc 7.3.0 which works perfectly.
+#                Override with: make AVR_TOOLCHAIN=/path/to/bin
+
+# Auto-detect Arduino IDE toolchain on macOS; fall back to system PATH
+ARDUINO_AVR_GCC := $(wildcard $(HOME)/Library/Arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin)
+AVR_TOOLCHAIN ?= $(ARDUINO_AVR_GCC)
+
+# Prefix for AVR tools (empty string if using system PATH)
+ifneq ($(AVR_TOOLCHAIN),)
+  AVR_PREFIX = $(AVR_TOOLCHAIN)/
+else
+  AVR_PREFIX =
+endif
 
 DEVICE     ?= atmega328p
 CLOCK      = 16000000
-PROGRAMMER ?= -c avrisp2 -P usb
+PROGRAMMER ?= -c arduino -P /dev/cu.usbmodem* -b 115200
 SOURCE    = main.c motion_control.c gcode.c spindle_control.c coolant_control.c serial.c \
              protocol.c stepper.c eeprom.c settings.c planner.c nuts_bolts.c limits.c jog.c\
              print.c probe.c report.c system.c
@@ -42,12 +52,7 @@ FUSES      = -U hfuse:w:0xd2:m -U lfuse:w:0xff:m
 # Tune the lines below only if you know what you are doing:
 
 AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE) -B 10 -F
-
-# Compile flags for avr-gcc v4.8.1. Does not produce -flto warnings.
-# COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections
-
-# Compile flags for avr-gcc v4.9.2 compatible with the IDE. Or if you don't care about the warnings. 
-COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections -flto
+COMPILE = $(AVR_PREFIX)avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections -flto
 
 
 OBJECTS = $(addprefix $(BUILDDIR)/,$(notdir $(SOURCE:.c=.o)))
@@ -90,14 +95,14 @@ $(BUILDDIR)/main.elf: $(OBJECTS)
 
 grbl.hex: $(BUILDDIR)/main.elf
 	rm -f grbl.hex
-	avr-objcopy -j .text -j .data -O ihex $(BUILDDIR)/main.elf grbl.hex
-	avr-size --format=berkeley $(BUILDDIR)/main.elf
+	$(AVR_PREFIX)avr-objcopy -j .text -j .data -O ihex $(BUILDDIR)/main.elf grbl.hex
+	$(AVR_PREFIX)avr-size --format=berkeley $(BUILDDIR)/main.elf
 # If you have an EEPROM section, you must also create a hex file for the
 # EEPROM and add it to the "flash" target.
 
 # Targets for code debugging and analysis:
 disasm:	main.elf
-	avr-objdump -d $(BUILDDIR)/main.elf
+	$(AVR_PREFIX)avr-objdump -d $(BUILDDIR)/main.elf
 
 cpp:
 	$(COMPILE) -E $(SOURCEDIR)/main.c

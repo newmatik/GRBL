@@ -1,80 +1,188 @@
-![GitHub Logo](https://github.com/gnea/gnea-Media/blob/master/Grbl%20Logo/Grbl%20Logo%20250px.png?raw=true)
+# GRBL CoreXY -- Newmatik Fork
 
-***
-_Click the `Release` tab to download pre-compiled `.hex` files or just [click here](https://github.com/gnea/grbl/releases)_
-***
-Grbl is a no-compromise, high performance, low cost alternative to parallel-port-based motion control for CNC milling. This version of Grbl runs on an Arduino with a 328p processor (Uno, Duemilanove, Nano, Micro, etc).
+A fork of [gnea/grbl](https://github.com/gnea/grbl) (v1.1) pre-configured for **CoreXY kinematics** and a **macOS command-line build chain**. Targets the Arduino Uno R3 (ATmega328P).
 
-The controller is written in highly optimized C utilizing every clever feature of the AVR-chips to achieve precise timing and asynchronous operation. It is able to maintain up to 30kHz of stable, jitter free control pulses.
+## What Changed from Upstream
 
-It accepts standards-compliant g-code and has been tested with the output of several CAM tools with no problems. Arcs, circles and helical motion are fully supported, as well as, all other primary g-code commands. Macro functions, variables, and most canned cycles are not supported, but we think GUIs can do a much better job at translating them into straight g-code anyhow.
+| Change | File |
+|---|---|
+| CoreXY kinematics enabled | `grbl/config.h` -- `#define COREXY` |
+| Homing cycles reconfigured for CoreXY (X and Y homed separately) | `grbl/config.h` -- `HOMING_CYCLE_0/1/2` |
+| Programmer set to Arduino USB bootloader | `Makefile` -- `PROGRAMMER` |
+| Removed old commit logs and Arduino IDE example sketches | `doc/log/`, `grbl/examples/` |
 
-Grbl includes full acceleration management with look ahead. That means the controller will look up to 16 motions into the future and plan its velocities ahead to deliver smooth acceleration and jerk-free cornering.
+## Prerequisites (macOS)
 
-* [Licensing](https://github.com/gnea/grbl/wiki/Licensing): Grbl is free software, released under the GPLv3 license.
+### 1. Homebrew
 
-* For more information and help, check out our **[Wiki pages!](https://github.com/gnea/grbl/wiki)** If you find that the information is out-dated, please to help us keep it updated by editing it or notifying our community! Thanks!
+If you don't have Homebrew yet:
 
-* Lead Developer: Sungeun "Sonny" Jeon, Ph.D. (USA) aka @chamnit
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
-* Built on the wonderful Grbl v0.6 (2011) firmware written by Simen Svale Skogsrud (Norway).
+### 2. AVR Toolchain
 
-***
+GRBL requires **avr-gcc 7.x** to fit within the ATmega328P's 32 KB flash. Newer versions (9.x+) produce significantly larger binaries that exceed the flash limit.
 
-### Official Supporters of the Grbl CNC Project
-![Official Supporters](https://github.com/gnea/gnea-Media/blob/master/Contributors.png?raw=true)
+**Recommended: Install the Arduino IDE** (even if you won't use it directly). It ships avr-gcc 7.3.0 which the Makefile auto-detects:
 
+- Download from [arduino.cc](https://www.arduino.cc/en/software)
+- Open it once and install the **Arduino AVR Boards** package via **Tools > Board > Boards Manager**
+- The toolchain will be installed to `~/Library/Arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/`
 
-***
+You also need `avrdude` for flashing (the Arduino IDE bundles one, but the Makefile uses the system `avrdude`):
 
-## Update Summary for v1.1
-- **IMPORTANT:** Your EEPROM will be wiped and restored with new settings. This is due to the addition of two new spindle speed '$' settings.
+```bash
+brew install avrdude
+```
 
-- **Real-time Overrides** : Alters the machine running state immediately with feed, rapid, spindle speed, spindle stop, and coolant toggle controls. This awesome new feature is common only on industrial machines, often used to optimize speeds and feeds while a job is running. Most hobby CNC's try to mimic this behavior, but usually have large amounts of lag. Grbl executes overrides in realtime and within tens of milliseconds.
+Verify the installation:
 
-- **Jogging Mode** : The new jogging commands are independent of the g-code parser, so that the parser state doesn't get altered and cause a potential crash if not restored properly. Documentation is included on how this works and how it can be used to control your machine via a joystick or rotary dial with a low-latency, satisfying response.
+```bash
+~/Library/Arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-gcc --version
+avrdude -v
+```
 
-- **Laser Mode** : The new "laser" mode will cause Grbl to move continuously through consecutive G1, G2, and G3 commands with spindle speed changes. When "laser" mode is disabled, Grbl will instead come to a stop to ensure a spindle comes up to speed properly. Spindle speed overrides also work with laser mode so you can tweak the laser power, if you need to during the job. Switch between "laser" mode and "normal" mode via a `$` setting.
+**Alternative:** If you want to use Homebrew's avr-gcc, install version 8:
 
-	- **Dynamic Laser Power Scaling with Speed** : If your machine has low accelerations, Grbl will automagically scale the laser power based on how fast Grbl is traveling, so you won't have burnt corners when your CNC has to make a turn! Enabled by the `M4` spindle CCW command when laser mode is enabled!
+```bash
+brew tap osx-cross/avr
+brew install avr-gcc@8
+```
 
-- **Sleep Mode** : Grbl may now be put to "sleep" via a `$SLP` command. This will disable everything, including the stepper drivers. Nice to have when you are leaving your machine unattended and want to power down everything automatically. Only a reset exits the sleep state.
+Then point the Makefile to it:
 
-- **Significant Interface Improvements**: Tweaked to increase overall performance, include lots more real-time data, and to simplify maintaining and writing GUIs. Based on direct feedback from multiple GUI developers and bench performance testing. _NOTE: GUIs need to specifically update their code to be compatible with v1.1 and later._
+```bash
+make AVR_TOOLCHAIN="$(brew --prefix avr-gcc@8)/bin"
+```
 
-	- **New Status Reports**: To account for the additional override data, status reports have been tweaked to cram more data into it, while still being smaller than before. Documentation is included, outlining how it has been changed. 
-	- **Improved Error/Alarm Feedback** : All Grbl error and alarm messages have been changed to providing a code. Each code is associated with a specific problem, so users will know exactly what is wrong without having to guess. Documentation and an easy to parse CSV is included in the repo.
-	- **Extended-ASCII realtime commands** : All overrides and future real-time commands are defined in the extended-ASCII character space. Unfortunately not easily type-able on a keyboard, but helps prevent accidental commands from a g-code file having these characters and gives lots of space for future expansion.
-	- **Message Prefixes** : Every message type from Grbl has a unique prefix to help GUIs immediately determine what the message is and parse it accordingly without having to know context. The prior interface had several instances of GUIs having to figure out the meaning of a message, which made everything more complicated than it needed to be.
+### 3. VS Code / Cursor Extension (optional)
 
-- New OEM specific features, such as safety door parking, single configuration file build option, EEPROM restrictions and restoring controls, and storing product data information.
- 
-- New safety door parking motion as a compile-option. Grbl will retract, disable the spindle/coolant, and park near Z max. When resumed, it will perform these task in reverse order and continue the program. Highly configurable, even to add more than one parking motion. See config.h for details.
+Install the **C/C++** extension (`ms-vscode.cpptools`) for IntelliSense and code navigation.
 
-- New '$' Grbl settings for max and min spindle rpm. Allows for tweaking the PWM output to more closely match true spindle rpm. When max rpm is set to zero or less than min rpm, the PWM pin D11 will act like a simple enable on/off output.
+## Build
 
-- Updated G28 and G30 behavior from NIST to LinuxCNC g-code description. In short, if a intermediate motion is specified, only the axes specified will move to the stored coordinates, not all axes as before.
+Compile the firmware from the project root:
 
-- Lots of minor bug fixes and refactoring to make the code more efficient and flexible.
+```bash
+make clean && make
+```
 
-- **NOTE:** Arduino Mega2560 support has been moved to an active, official Grbl-Mega [project](http://www.github.com/gnea/grbl-Mega/). All new developments here and there will be synced when it makes sense to.
+The Makefile auto-detects the Arduino IDE's avr-gcc 7.3.0 on macOS. To use a different toolchain, override the path:
 
+```bash
+make AVR_TOOLCHAIN=/path/to/avr-gcc/bin
+```
+
+This produces `grbl.hex` in the project root directory. The build output shows the firmware size -- it must be under 32,768 bytes (32 KB) to fit in the ATmega328P flash.
+
+## Flash to Arduino Uno
+
+### 1. Find Your Serial Port
+
+Plug in the Arduino Uno via USB and identify the serial device:
+
+```bash
+ls /dev/cu.usbmodem*
+```
+
+You should see something like `/dev/cu.usbmodem11401`.
+
+### 2. Flash
+
+If the Makefile's `PROGRAMMER` line already matches your serial port (it uses a wildcard by default), simply run:
+
+```bash
+make flash
+```
+
+If you have multiple serial devices, specify the exact port:
+
+```bash
+make flash PROGRAMMER="-c arduino -P /dev/cu.usbmodem11401 -b 115200"
+```
+
+### 3. Verify
+
+Connect to the Arduino with a serial terminal at **115200 baud** to confirm GRBL is running:
+
+```bash
+screen /dev/cu.usbmodem11401 115200
+```
+
+You should see a GRBL welcome message. Press `Ctrl-A` then `K` then `Y` to exit screen.
+
+## Configuration
+
+All compile-time configuration lives in two files:
+
+- **`grbl/config.h`** -- Feature toggles (CoreXY, homing, safety door, laser mode, etc.)
+- **`grbl/defaults.h`** -- Default machine parameters (steps/mm, max rates, acceleration, travel limits)
+
+After editing either file, rebuild and re-flash:
+
+```bash
+make clean && make && make flash
+```
+
+Runtime settings (steps/mm, acceleration, etc.) can also be changed over serial with `$` commands without recompiling. See `doc/markdown/settings.md` for the full settings reference.
+
+## CoreXY Notes
+
+- CoreXY is enabled via `#define COREXY` in `grbl/config.h`.
+- The A and B motors **must** have the same steps/mm. Set `$100` and `$101` to identical values.
+- Homing is configured to home Z first, then X, then Y in separate cycles (required for CoreXY).
+- If motions move in unexpected directions, check motor wiring against the [CoreXY theory](http://corexy.com/theory.html).
+
+## Project Structure
 
 ```
-List of Supported G-Codes in Grbl v1.1:
-  - Non-Modal Commands: G4, G10L2, G10L20, G28, G30, G28.1, G30.1, G53, G92, G92.1
-  - Motion Modes: G0, G1, G2, G3, G38.2, G38.3, G38.4, G38.5, G80
-  - Feed Rate Modes: G93, G94
-  - Unit Modes: G20, G21
-  - Distance Modes: G90, G91
-  - Arc IJK Distance Modes: G91.1
-  - Plane Select Modes: G17, G18, G19
-  - Tool Length Offset Modes: G43.1, G49
-  - Cutter Compensation Modes: G40
-  - Coordinate System Modes: G54, G55, G56, G57, G58, G59
-  - Control Modes: G61
-  - Program Flow: M0, M1, M2, M30*
-  - Coolant Control: M7*, M8, M9
-  - Spindle Control: M3, M4, M5
-  - Valid Non-Command Words: F, I, J, K, L, N, P, R, S, T, X, Y, Z
+.
+├── Makefile              # Build and flash configuration
+├── COPYING               # GPLv3 license
+├── grbl/                 # Firmware source code
+│   ├── config.h          # Compile-time feature configuration
+│   ├── defaults.h        # Default machine parameters
+│   ├── cpu_map.h         # ATmega328P pin mapping
+│   ├── main.c            # Entry point
+│   ├── stepper.c/h       # Stepper motor driver
+│   ├── planner.c/h       # Motion planner with look-ahead
+│   ├── gcode.c/h         # G-code parser
+│   ├── motion_control.c/h
+│   ├── serial.c/h        # UART communication
+│   └── ...               # Additional modules
+├── build/                # Compiled object files (gitignored)
+└── doc/
+    ├── csv/              # Error, alarm, and setting code references
+    ├── markdown/         # Commands, settings, jogging, laser mode docs
+    └── script/           # Python streaming scripts for testing
 ```
+
+## Supported G-Codes
+
+```
+Non-Modal Commands: G4, G10L2, G10L20, G28, G30, G28.1, G30.1, G53, G92, G92.1
+Motion Modes:       G0, G1, G2, G3, G38.2, G38.3, G38.4, G38.5, G80
+Feed Rate Modes:    G93, G94
+Unit Modes:         G20, G21
+Distance Modes:     G90, G91
+Arc IJK Distance:   G91.1
+Plane Select:       G17, G18, G19
+Tool Length Offset: G43.1, G49
+Cutter Comp:        G40
+Coord Systems:      G54, G55, G56, G57, G58, G59
+Control Modes:      G61
+Program Flow:       M0, M1, M2, M30
+Coolant Control:    M7*, M8, M9
+Spindle Control:    M3, M4, M5
+Valid Words:        F, I, J, K, L, N, P, R, S, T, X, Y, Z
+```
+
+## Credits
+
+This is a fork of [GRBL](https://github.com/gnea/grbl) by Sungeun "Sonny" Jeon ([@chamnit](https://github.com/chamnit)), built on the original Grbl v0.6 by Simen Svale Skogsrud.
+
+## License
+
+GPLv3. See [COPYING](COPYING) for the full license text.
