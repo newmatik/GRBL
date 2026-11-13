@@ -1,0 +1,23 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    # Ubuntu 24.04 packages avr-gcc 7.3.0, the version the firmware needs to fit the flash.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AVR toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr
+          avr-gcc --version
+      - name: Build firmware (fails if it exceeds the flash)
+        run: make

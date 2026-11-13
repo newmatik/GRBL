@@ -75,7 +75,9 @@ The Makefile auto-detects the Arduino IDE's avr-gcc 7.3.0 on macOS. To use a dif
 make AVR_TOOLCHAIN=/path/to/avr-gcc/bin
 ```
 
-This produces `grbl.hex` in the project root directory. The build output shows the firmware size -- it must be under 32,768 bytes (32 KB) to fit in the ATmega328P flash.
+This produces `grbl.hex` in the project root directory. The build output shows the firmware size. `text` plus `data` must not exceed 32,256 bytes: the ATmega328P has 32,768 bytes of flash and the Arduino Uno bootloader occupies 512 of them. `make` fails if the image is larger, which is what happens with avr-gcc 9 or newer.
+
+Every push to `master` and every pull request is built with avr-gcc 7.3.0 by the GitHub Actions workflow in `.github/workflows/build.yml`.
 
 ## Flash to Arduino Uno
 

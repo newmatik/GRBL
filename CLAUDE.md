@@ -1,0 +1,3 @@
+# GRBL CoreXY
+
+@AGENTS.md

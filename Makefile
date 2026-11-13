@@ -46,6 +46,8 @@ SOURCE    = main.c motion_control.c gcode.c spindle_control.c coolant_control.c 
              print.c probe.c report.c system.c
 BUILDDIR = build
 SOURCEDIR = grbl
+# Application flash of the Arduino Uno: 32768 bytes minus the 512 byte bootloader.
+MAX_FLASH ?= 32256
 # FUSES      = -U hfuse:w:0xd9:m -U lfuse:w:0x24:m
 FUSES      = -U hfuse:w:0xd2:m -U lfuse:w:0xff:m
 
@@ -97,6 +99,11 @@ grbl.hex: $(BUILDDIR)/main.elf
 	rm -f grbl.hex
 	$(AVR_PREFIX)avr-objcopy -j .text -j .data -O ihex $(BUILDDIR)/main.elf grbl.hex
 	$(AVR_PREFIX)avr-size --format=berkeley $(BUILDDIR)/main.elf
+	@size=$$($(AVR_PREFIX)avr-size --format=berkeley $(BUILDDIR)/main.elf | awk 'NR==2 {print $$1+$$2}'); \
+	if [ "$$size" -gt $(MAX_FLASH) ]; then \
+		echo "error: firmware is $$size bytes, the board holds $(MAX_FLASH). Build with avr-gcc 7.x (see README)." >&2; \
+		rm -f grbl.hex; exit 1; \
+	fi
 # If you have an EEPROM section, you must also create a hex file for the
 # EEPROM and add it to the "flash" target.
 
@@ -108,4 +115,4 @@ cpp:
 	$(COMPILE) -E $(SOURCEDIR)/main.c
 
 # include generated header dependencies
--include $(BUILDDIR)/$(OBJECTS:.o=.d)
+-include $(OBJECTS:.o=.d)
